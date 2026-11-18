@@ -243,7 +243,7 @@
   // CONFIGURATION SUPABASE (COMMUNE A TOUS LES CLIENTS - FILTREE PAR RLS)
   // ============================================================================
   const SUPABASE_URL = "https://ujiqjqrbzmfssbmtljkd.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_gtZBDp5CUD8Hk06Wz3Qr-w__ruJm8-g"; // <-- Publishable Key complète ici
+  const SUPABASE_KEY = "sb_publishable_gtZBDp5CUD8Hk06Wz3Qr-w__ruJm8-g";
 
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -315,7 +315,7 @@
     map = L.map('map', {
       center: [48.11, -1.68],
       zoom: 14,
-      layers: [googleHybridLayer] // Vue Satellite + routes par défaut pour le milieu agricole
+      layers: [googleHybridLayer]
     });
 
     L.control.layers({
@@ -331,23 +331,26 @@
   // ============================================================================
   async function loadAllData() {
     // A. Lecture de la station du client
-    const { data: stData } = await sb.from('stations').select('*');
+    const { data: stData, error: stErr } = await sb.from('stations').select('*');
+    if (stErr) console.error("Erreur lecture stations:", stErr.message);
     stationsList = stData || [];
     if (stationsList.length > 0) {
       document.getElementById('exploitationName').innerText = stationsList[0].nom_exploitation || "Exploitation Connectée";
     }
 
-    // B. Lecture des nœuds émetteurs déclarés (Heltec T114, etc.)
-    const { data: ndData } = await sb.from('noeuds').select('*');
+    // B. Lecture des nœuds émetteurs de cuves déclarés dans noeuds_cuves
+    const { data: ndData, error: ndErr } = await sb.from('noeuds_cuves').select('*');
+    if (ndErr) console.error("Erreur lecture noeuds_cuves:", ndErr.message);
     noeudsMap = {};
-    (ndData || []).forEach(n => { noeudsMap[n.cuve_id] = n; });
+    (ndData || []).forEach(n => { noeudsMap[Number(n.cuve_id)] = n; });
 
     // C. Lecture des 200 dernières mesures dans telemetrie_cuves
-    const { data: msData } = await sb
+    const { data: msData, error: msErr } = await sb
       .from('telemetrie_cuves')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200);
+    if (msErr) console.error("Erreur lecture telemetrie_cuves:", msErr.message);
 
     mesuresList = msData || [];
     document.getElementById('lastSyncText').innerText = "Synchro : " + new Date().toLocaleTimeString();
@@ -362,10 +365,11 @@
     // Regrouper le dernier état connu par cuve_id
     const latestByNode = {};
     mesuresList.forEach(m => {
-      if (!latestByNode[m.cuve_id]) latestByNode[m.cuve_id] = m;
+      const cid = Number(m.cuve_id);
+      if (!latestByNode[cid]) latestByNode[cid] = m;
     });
 
-    // Liste complète des IDs de nœuds (ceux configurés dans `noeuds` + ceux reçus dans `telemetrie_cuves`)
+    // Liste complète des IDs de nœuds (ceux configurés dans `noeuds_cuves` + ceux reçus dans `telemetrie_cuves`)
     const allNodeIds = Array.from(new Set([
       ...Object.keys(noeudsMap).map(Number),
       ...Object.keys(latestByNode).map(Number)
@@ -487,8 +491,8 @@
     let baseLatLng = null;
 
     // 1. Marqueur de la Station de Base Centrale (Heltec V3)
-    if (baseStation && baseStation.lat && baseStation.lon) {
-      baseLatLng = [baseStation.lat, baseStation.lon];
+    if (baseStation && baseStation.lat != null && baseStation.lon != null) {
+      baseLatLng = [Number(baseStation.lat), Number(baseStation.lon)];
       boundsPoints.push(baseLatLng);
 
       const baseMarker = L.circleMarker(baseLatLng, {
@@ -498,16 +502,16 @@
       baseMarker.bindPopup(`
         <strong>📡 Station Base (Heltec V3)</strong><br>
         Exploitation : ${baseStation.nom_exploitation || '-'}<br>
-        Coordonnées : ${baseStation.lat.toFixed(5)}, ${baseStation.lon.toFixed(5)}
+        Coordonnées : ${Number(baseStation.lat).toFixed(5)}, ${Number(baseStation.lon).toFixed(5)}
       `);
     }
 
     // 2. Marqueurs des Nœuds Capteurs (Heltec T114, etc.) + Traits de liaison LoRa
     allNodeIds.forEach(id => {
       const cfg = noeudsMap[id];
-      if (!cfg || !cfg.lat || !cfg.lon) return;
+      if (!cfg || cfg.lat == null || cfg.lon == null) return;
 
-      const nodeLatLng = [cfg.lat, cfg.lon];
+      const nodeLatLng = [Number(cfg.lat), Number(cfg.lon)];
       nodeCoordinates[id] = nodeLatLng;
       boundsPoints.push(nodeLatLng);
 
@@ -534,7 +538,7 @@
 
       marker.bindPopup(`
         <strong>${cfg.nom || 'Capteur #' + id}</strong> (${cfg.materiel || 'LoRa'})<br>
-        Statut : <strong>${m ? m.statut : 'Aucune donnée'}</strong><br>
+        Statut : <strong>${m ? m.statut : 'En attente de 1ère trame'}</strong><br>
         Batterie : ${m ? m.vbat : '-'} | RSSI : ${m ? m.rssi + ' dBm' : '-'}
         ${distText}
       `);
@@ -563,7 +567,7 @@
   function updateChart() {
     const selectedId = Number(document.getElementById('chartNodeSelect').value);
     const nodeHistory = mesuresList
-      .filter(m => m.cuve_id === selectedId)
+      .filter(m => Number(m.cuve_id) === selectedId)
       .slice(0, 30)
       .reverse();
 
