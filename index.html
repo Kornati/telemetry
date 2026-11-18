@@ -342,9 +342,9 @@
     noeudsMap = {};
     (ndData || []).forEach(n => { noeudsMap[n.cuve_id] = n; });
 
-    // C. Lecture des 200 dernières mesures
+    // C. Lecture des 200 dernières mesures dans telemetrie_cuves
     const { data: msData } = await sb
-      .from('mesures')
+      .from('telemetrie_cuves')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200);
@@ -365,7 +365,7 @@
       if (!latestByNode[m.cuve_id]) latestByNode[m.cuve_id] = m;
     });
 
-    // Liste complète des IDs de nœuds (ceux configurés dans `noeuds` + ceux reçus dans `mesures`)
+    // Liste complète des IDs de nœuds (ceux configurés dans `noeuds` + ceux reçus dans `telemetrie_cuves`)
     const allNodeIds = Array.from(new Set([
       ...Object.keys(noeudsMap).map(Number),
       ...Object.keys(latestByNode).map(Number)
