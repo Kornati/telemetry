@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ViaRemota — Portail Client Télémétrie</title>
+
+  <!-- Leaflet CSS (Cartographie) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Supabase JS & Chart.js & Leaflet JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --primary: #0f172a;
+      --accent: #2563eb;
+      --ok: #16a34a;
+      --ok-bg: #dcfce7;
+      --danger: #dc2626;
+      --danger-bg: #fee2e2;
+      --warn: #d97706;
+      --warn-bg: #fef3c7;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    .hidden { display: none !important; }
+
+    /* ECRAN DE CONNEXION */
+    .login-wrapper {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    }
+    .login-card {
+      background: #fff; width: 100%; max-width: 400px; padding: 32px; border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    }
+    .login-card h1 { margin: 0 0 6px; font-size: 1.5rem; color: var(--primary); }
+    .login-card p { margin: 0 0 24px; color: var(--muted); font-size: 0.9rem; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+    input, select {
+      width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem;
+    }
+    .btn {
+      padding: 11px 16px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;
+      font-size: 0.9rem; transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.92; }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+    .btn-outline { background: #fff; color: var(--text); border: 1px solid var(--border); }
+    .error-msg { color: var(--danger); font-size: 0.85rem; margin-top: 10px; }
+
+    /* EN-TETE TABLEAU DE BORD */
+    header {
+      background: var(--primary); color: #fff; padding: 14px 24px;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand h2 { margin: 0; font-size: 1.2rem; }
+    .station-badge {
+      background: #334155; color: #e2e8f0; padding: 4px 10px; border-radius: 99px; font-size: 0.8rem;
+    }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+
+    /* GRILLE PRINCIPALE */
+    .dashboard { max-width: 1280px; margin: 0 auto; padding: 20px; }
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--card); padding: 16px; border-radius: 12px; border: 1px solid var(--border);
+    }
+    .kpi-lbl { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; font-weight: 600; }
+    .kpi-val { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+
+    .main-grid {
+      display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 20px; align-items: start;
+    }
+    @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--card); border-radius: 14px; border: 1px solid var(--border);
+      padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+    }
+    .panel-title { font-size: 1.05rem; font-weight: 700; margin: 0; }
+
+    /* CARTE LEAFLET */
+    #map { width: 100%; height: 430px; border-radius: 10px; border: 1px solid var(--border); z-index: 1; }
+
+    /* CARTES CAPTEURS */
+    .node-card {
+      border: 1px solid var(--border); border-left: 6px solid var(--muted);
+      border-radius: 12px; padding: 14px; margin-bottom: 12px; background: #fff;
+      cursor: pointer; transition: transform 0.1s;
+    }
+    .node-card:hover { transform: translateY(-1px); }
+    .node-card.ok { border-left-color: var(--ok); }
+    .node-card.vide { border-left-color: var(--danger); }
+    .node-card.offline { border-left-color: var(--warn); }
+
+    .node-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .node-name { font-weight: 700; font-size: 1.05rem; }
+    .node-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    .pill { padding: 4px 10px; border-radius: 99px; font-weight: 700; font-size: 0.78rem; }
+    .pill.ok { background: var(--ok-bg); color: var(--ok); }
+    .pill.vide { background: var(--danger-bg); color: var(--danger); }
+    .pill.offline { background: var(--warn-bg); color: var(--warn); }
+
+    .metrics-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+      background: var(--bg); padding: 9px; border-radius: 8px; text-align: center;
+    }
+    .m-val { font-weight: 700; font-size: 0.88rem; }
+    .m-lbl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; }
+
+    /* TABLEAU HISTORIQUE */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; background: var(--bg); }
+  </style>
+</head>
+<body>
+
+<!-- ==================== 1. ECRAN DE CONNEXION ==================== -->
+<div id="loginScreen" class="login-wrapper">
+  <div class="login-card">
+    <h1>ViaRemota</h1>
+    <p>Supervision de cuves & télémétrie radio LoRa</p>
+    <form onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>Adresse e-mail de l'exploitation</label>
+        <input type="email" id="emailInput" required placeholder="contact@ferme.fr">
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" id="passInput" required placeholder="••••••••">
+      </div>
+      <button type="submit" class="btn btn-primary" id="btnLogin">Se connecter</button>
+      <div id="loginError" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== 2. TABLEAU DE BORD CLIENT ==================== -->
+<div id="appScreen" class="hidden">
+  <header>
+    <div class="brand">
+      <h2>ViaRemota</h2>
+      <span id="exploitationName" class="station-badge">Chargement...</span>
+    </div>
+    <div class="header-actions">
+      <span id="lastSyncText" style="font-size:0.8rem; color:#cbd5e1;"></span>
+      <button class="btn btn-outline" style="padding:7px 12px; font-size:0.8rem;" onclick="loadAllData()">Actualiser</button>
+      <button class="btn btn-outline" style="padding:7px 12px; font-size:0.8rem;" onclick="handleLogout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <div class="dashboard">
+    <!-- Bandeau KPI -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-lbl">Nœuds Capteurs</div>
+        <div class="kpi-val" id="kpiTotal">-</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">État des Niveaux</div>
+        <div class="kpi-val" id="kpiAlerts">-</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">Dernière Trame Reçue</div>
+        <div class="kpi-val" id="kpiLastTime" style="font-size:1.15rem;">-</div>
+      </div>
+    </div>
+
+    <!-- Grille Carte + Capteurs -->
+    <div class="main-grid">
+      <!-- Colonne Gauche : Carte & Graphique -->
+      <div>
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Carte du Réseau LoRa (Base & Nœuds Émetteurs)</h3>
+            <span style="font-size:0.78rem; color:var(--muted);">Fonds OSM / Google Satellite</span>
+          </div>
+          <div id="map"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Historique Batterie (V) & Signal Radio (RSSI)</h3>
+            <select id="chartNodeSelect" style="width:auto; padding:6px 10px;" onchange="updateChart()"></select>
+          </div>
+          <canvas id="telemetryChart" height="115"></canvas>
+        </div>
+      </div>
+
+      <!-- Colonne Droite : Cartes d'état des capteurs & Journal -->
+      <div>
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">État des Capteurs en Temps Réel</h3>
+            <span style="font-size:0.75rem; color:var(--muted);">Cliquer pour centrer</span>
+          </div>
+          <div id="nodesContainer"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Dernières Mesures Reçues</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Heure</th>
+                  <th>Capteur</th>
+                  <th>Statut</th>
+                  <th>Batterie</th>
+                  <th>RSSI / SNR</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ============================================================================
+  // CONFIGURATION SUPABASE (COMMUNE A TOUS LES CLIENTS - FILTREE PAR RLS)
+  // ============================================================================
+  const SUPABASE_URL = "https://ujiqjqrbzmfssbmtljkd.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_gtZBDp5CUD8Hk06Wz3Qr-w__ruJm8-g"; // <-- Publishable Key complète ici
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Variables d'état
+  let map = null, markersLayer = null;
+  let telemetryChart = null;
+  let stationsList = [];
+  let noeudsMap = {};    // Clé: cuve_id -> config du nœud (nom, type, matériel, lat, lon)
+  let mesuresList = [];  // Historique des mesures reçues
+  let refreshTimer = null;
+
+  const OFFLINE_THRESHOLD_SEC = 3600; // Considéré hors-ligne si aucune trame depuis 1h
+
+  // ============================================================================
+  // 1. GESTION SESSION & AUTHENTIFICATION
+  // ============================================================================
+  window.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) showDashboard();
+  });
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('emailInput').value.trim();
+    const password = document.getElementById('passInput').value;
+    const errBox = document.getElementById('loginError');
+    errBox.innerText = "";
+
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      errBox.innerText = "Identifiants incorrects ou compte non activé.";
+    } else {
+      showDashboard();
+    }
+  }
+
+  async function handleLogout() {
+    await sb.auth.signOut();
+    if (refreshTimer) clearInterval(refreshTimer);
+    document.getElementById('appScreen').classList.add('hidden');
+    document.getElementById('loginScreen').classList.remove('hidden');
+  }
+
+  function showDashboard() {
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('appScreen').classList.remove('hidden');
+    initMap();
+    loadAllData();
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(loadAllData, 15000); // Rafraîchissement auto toutes les 15s
+  }
+
+  // ============================================================================
+  // 2. INITIALISATION CARTE LEAFLET (OSM + GOOGLE SATELLITE HYBRIDE)
+  // ============================================================================
+  function initMap() {
+    if (map) return;
+
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    });
+
+    const googleHybridLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      attribution: '© Google Satellite'
+    });
+
+    map = L.map('map', {
+      center: [48.11, -1.68],
+      zoom: 14,
+      layers: [googleHybridLayer] // Vue Satellite + routes par défaut pour le milieu agricole
+    });
+
+    L.control.layers({
+      "Satellite Google": googleHybridLayer,
+      "Plan OpenStreetMap": osmLayer
+    }).addTo(map);
+
+    markersLayer = L.layerGroup().addTo(map);
+  }
+
+  // ============================================================================
+  // 3. CHARGEMENT DES DONNEES DEPUIS SUPABASE (RLS AUTOMATIQUE)
+  // ============================================================================
+  async function loadAllData() {
+    // A. Lecture de la station du client
+    const { data: stData } = await sb.from('stations').select('*');
+    stationsList = stData || [];
+    if (stationsList.length > 0) {
+      document.getElementById('exploitationName').innerText = stationsList[0].nom_exploitation || "Exploitation Connectée";
+    }
+
+    // B. Lecture des nœuds émetteurs déclarés (Heltec T114, etc.)
+    const { data: ndData } = await sb.from('noeuds').select('*');
+    noeudsMap = {};
+    (ndData || []).forEach(n => { noeudsMap[n.cuve_id] = n; });
+
+    // C. Lecture des 200 dernières mesures
+    const { data: msData } = await sb
+      .from('mesures')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    mesuresList = msData || [];
+    document.getElementById('lastSyncText').innerText = "Synchro : " + new Date().toLocaleTimeString();
+
+    renderDashboard();
+  }
+
+  // ============================================================================
+  // 4. RENDU CARTES, CARTOGRAPHIE, GRAPHIQUE ET TABLEAU
+  // ============================================================================
+  function renderDashboard() {
+    // Regrouper le dernier état connu par cuve_id
+    const latestByNode = {};
+    mesuresList.forEach(m => {
+      if (!latestByNode[m.cuve_id]) latestByNode[m.cuve_id] = m;
+    });
+
+    // Liste complète des IDs de nœuds (ceux configurés dans `noeuds` + ceux reçus dans `mesures`)
+    const allNodeIds = Array.from(new Set([
+      ...Object.keys(noeudsMap).map(Number),
+      ...Object.keys(latestByNode).map(Number)
+    ])).sort((a, b) => a - b);
+
+    // Mise à jour des KPIs
+    document.getElementById('kpiTotal').innerText = allNodeIds.length + " actif(s)";
+    let alertCount = 0;
+    allNodeIds.forEach(id => {
+      const m = latestByNode[id];
+      if (!m || (m.statut || "").toUpperCase().includes("VIDE")) alertCount++;
+    });
+    const kpiAlertsEl = document.getElementById('kpiAlerts');
+    if (alertCount === 0 && allNodeIds.length > 0) {
+      kpiAlertsEl.innerText = "Tous OK";
+      kpiAlertsEl.style.color = "var(--ok)";
+    } else if (allNodeIds.length > 0) {
+      kpiAlertsEl.innerText = alertCount + " Alerte(s)";
+      kpiAlertsEl.style.color = "var(--danger)";
+    }
+
+    if (mesuresList.length > 0) {
+      document.getElementById('kpiLastTime').innerText = new Date(mesuresList[0].created_at).toLocaleTimeString();
+    }
+
+    // Rendu des cartes de capteurs
+    const container = document.getElementById('nodesContainer');
+    if (allNodeIds.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">Aucun capteur détecté pour le moment.</div>';
+    } else {
+      container.innerHTML = allNodeIds.map(id => {
+        const cfg = noeudsMap[id] || {};
+        const m = latestByNode[id];
+        const nom = cfg.nom || `Nœud Capteur #${id}`;
+        const mat = cfg.materiel || "Émetteur LoRa";
+        const type = (cfg.type_noeud || "cuve").toUpperCase();
+
+        if (!m) {
+          return `
+            <div class="node-card offline" onclick="focusNodeOnMap(${id})">
+              <div class="node-top">
+                <div>
+                  <div class="node-name">${nom}</div>
+                  <div class="node-meta">ID #${id} • ${mat} (${type})</div>
+                </div>
+                <span class="pill offline">EN ATTENTE</span>
+              </div>
+            </div>`;
+        }
+
+        const ageSec = Math.floor((Date.now() - new Date(m.created_at).getTime()) / 1000);
+        const isOffline = ageSec > OFFLINE_THRESHOLD_SEC;
+        const isVide = (m.statut || "").toUpperCase().includes("VIDE");
+        const stateClass = isOffline ? "offline" : (isVide ? "vide" : "ok");
+        const pillText = isOffline ? "HORS LIGNE" : m.statut;
+        const ageText = ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)} min`;
+
+        return `
+          <div class="node-card ${stateClass}" onclick="focusNodeOnMap(${id})">
+            <div class="node-top">
+              <div>
+                <div class="node-name">${nom}</div>
+                <div class="node-meta">ID #${id} • ${mat} • Trame #${m.seq || 0}</div>
+              </div>
+              <span class="pill ${stateClass}">${pillText}</span>
+            </div>
+            <div class="metrics-grid">
+              <div><div class="m-val">${m.vbat || '-'}</div><div class="m-lbl">Batterie</div></div>
+              <div><div class="m-val">${m.rssi} dBm</div><div class="m-lbl">RSSI</div></div>
+              <div><div class="m-val">${m.snr} dB</div><div class="m-lbl">SNR</div></div>
+              <div><div class="m-val">${ageText}</div><div class="m-lbl">Âge</div></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // Rendu de la carte Leaflet
+    renderMapMarkers(allNodeIds, latestByNode);
+
+    // Rendu de la liste déroulante du graphique
+    const selectEl = document.getElementById('chartNodeSelect');
+    const previousVal = selectEl.value;
+    selectEl.innerHTML = allNodeIds.map(id => {
+      const nom = (noeudsMap[id] && noeudsMap[id].nom) ? noeudsMap[id].nom : `Capteur #${id}`;
+      return `<option value="${id}">${nom}</option>`;
+    }).join('');
+    if (previousVal && allNodeIds.includes(Number(previousVal))) selectEl.value = previousVal;
+    updateChart();
+
+    // Rendu du tableau des 15 dernières mesures
+    const tbody = document.getElementById('historyTableBody');
+    tbody.innerHTML = mesuresList.slice(0, 15).map(m => {
+      const nom = (noeudsMap[m.cuve_id] && noeudsMap[m.cuve_id].nom) ? noeudsMap[m.cuve_id].nom : `#${m.cuve_id}`;
+      const d = new Date(m.created_at);
+      return `
+        <tr>
+          <td>${d.toLocaleTimeString()}</td>
+          <td><strong>${nom}</strong></td>
+          <td>${m.statut}</td>
+          <td>${m.vbat}</td>
+          <td>${m.rssi} dBm / ${m.snr} dB</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ============================================================================
+  // 5. DESSIN DES CAPTEURS, DE LA BASE ET DES LIAISONS RADIO SUR LA CARTE
+  // ============================================================================
+  const boundsPoints = [];
+  let nodeCoordinates = {};
+
+  function renderMapMarkers(allNodeIds, latestByNode) {
+    if (!map || !markersLayer) return;
+    markersLayer.clearLayers();
+    boundsPoints.length = 0;
+    nodeCoordinates = {};
+
+    const baseStation = stationsList[0];
+    let baseLatLng = null;
+
+    // 1. Marqueur de la Station de Base Centrale (Heltec V3)
+    if (baseStation && baseStation.lat && baseStation.lon) {
+      baseLatLng = [baseStation.lat, baseStation.lon];
+      boundsPoints.push(baseLatLng);
+
+      const baseMarker = L.circleMarker(baseLatLng, {
+        radius: 10, fillColor: "#2563eb", color: "#ffffff", weight: 3, fillOpacity: 1
+      }).addTo(markersLayer);
+
+      baseMarker.bindPopup(`
+        <strong>📡 Station Base (Heltec V3)</strong><br>
+        Exploitation : ${baseStation.nom_exploitation || '-'}<br>
+        Coordonnées : ${baseStation.lat.toFixed(5)}, ${baseStation.lon.toFixed(5)}
+      `);
+    }
+
+    // 2. Marqueurs des Nœuds Capteurs (Heltec T114, etc.) + Traits de liaison LoRa
+    allNodeIds.forEach(id => {
+      const cfg = noeudsMap[id];
+      if (!cfg || !cfg.lat || !cfg.lon) return;
+
+      const nodeLatLng = [cfg.lat, cfg.lon];
+      nodeCoordinates[id] = nodeLatLng;
+      boundsPoints.push(nodeLatLng);
+
+      const m = latestByNode[id];
+      const ageSec = m ? Math.floor((Date.now() - new Date(m.created_at).getTime()) / 1000) : 999999;
+      const isOffline = !m || ageSec > OFFLINE_THRESHOLD_SEC;
+      const isVide = m && (m.statut || "").toUpperCase().includes("VIDE");
+
+      const color = isOffline ? "#d97706" : (isVide ? "#dc2626" : "#16a34a");
+
+      // Liaison radio entre la Base Heltec V3 et le Nœud Capteur
+      let distText = "";
+      if (baseLatLng) {
+        const distMeters = Math.round(map.distance(baseLatLng, nodeLatLng));
+        distText = `<br>Distance Base : <strong>${distMeters} m</strong>`;
+        L.polyline([baseLatLng, nodeLatLng], {
+          color: color, weight: 2.5, dashArray: "6, 6", opacity: 0.85
+        }).addTo(markersLayer);
+      }
+
+      const marker = L.circleMarker(nodeLatLng, {
+        radius: 9, fillColor: color, color: "#ffffff", weight: 2.5, fillOpacity: 0.95
+      }).addTo(markersLayer);
+
+      marker.bindPopup(`
+        <strong>${cfg.nom || 'Capteur #' + id}</strong> (${cfg.materiel || 'LoRa'})<br>
+        Statut : <strong>${m ? m.statut : 'Aucune donnée'}</strong><br>
+        Batterie : ${m ? m.vbat : '-'} | RSSI : ${m ? m.rssi + ' dBm' : '-'}
+        ${distText}
+      `);
+    });
+
+    if (boundsPoints.length > 0 && !map._initialFitDone) {
+      map.fitBounds(boundsPoints, { padding: [40, 40], maxZoom: 16 });
+      map._initialFitDone = true;
+    }
+  }
+
+  function focusNodeOnMap(id) {
+    if (nodeCoordinates[id] && map) {
+      map.setView(nodeCoordinates[id], 17);
+    }
+    const selectEl = document.getElementById('chartNodeSelect');
+    if (selectEl) {
+      selectEl.value = String(id);
+      updateChart();
+    }
+  }
+
+  // ============================================================================
+  // 6. GRAPHIQUE TELEMETRIE (BATTERIE VBAT & RSSI)
+  // ============================================================================
+  function updateChart() {
+    const selectedId = Number(document.getElementById('chartNodeSelect').value);
+    const nodeHistory = mesuresList
+      .filter(m => m.cuve_id === selectedId)
+      .slice(0, 30)
+      .reverse();
+
+    const labels = nodeHistory.map(m => new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+    const vbatValues = nodeHistory.map(m => parseFloat(String(m.vbat).replace(',', '.')) || null);
+    const rssiValues = nodeHistory.map(m => m.rssi);
+
+    const ctx = document.getElementById('telemetryChart').getContext('2d');
+    if (telemetryChart) telemetryChart.destroy();
+
+    telemetryChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Tension Batterie (V)',
+            data: vbatValues,
+            borderColor: '#16a34a',
+            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+            yAxisID: 'yVbat',
+            tension: 0.25
+          },
+          {
+            label: 'Signal RSSI (dBm)',
+            data: rssiValues,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+            yAxisID: 'yRssi',
+            tension: 0.25
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          yVbat: { type: 'linear', position: 'left', suggestedMin: 3.0, suggestedMax: 4.3 },
+          yRssi: { type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  }
+</script>
+</body>
+</html>
