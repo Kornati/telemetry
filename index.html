@@ -306,7 +306,7 @@
 
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) {
-      errBox.innerText = "Identifiants incorrects ou compte non activé.";
+      errBox.innerText = "Erreur de connexion : " + error.message;
     } else {
       showDashboard();
     }
@@ -407,6 +407,13 @@
   // ============================================================================
   // 4. RENDU CARTES, CARTOGRAPHIE, GRAPHIQUE ET TABLEAU
   // ============================================================================
+  function formatRouteLabel(routePath) {
+    if (!routePath) return "Direct";
+    if (routePath === "FLOOD") return "Via Flooding";
+    const ids = String(routePath).split(',').map(s => '#' + s.trim());
+    return "Via Relais " + ids.join(' → ');
+  }
+
   function renderDashboard() {
     // Regrouper le dernier état connu par cuve_id
     const latestByNode = {};
@@ -422,7 +429,7 @@
       if (!latestByRelay[rid]) latestByRelay[rid] = r;
     });
 
-    // Liste complète des IDs de nœuds (ceux configurés dans `noeuds_cuves` + ceux reçus dans `telemetrie_cuves`)
+    // Liste complète des IDs de nœuds
     const allNodeIds = Array.from(new Set([
       ...Object.keys(noeudsMap).map(Number),
       ...Object.keys(latestByNode).map(Number)
@@ -488,13 +495,14 @@
         const stateClass = isOffline ? "offline" : (isVide ? "vide" : "ok");
         const pillText = isOffline ? "HORS LIGNE" : m.statut;
         const ageText = ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)} min`;
+        const routeLabel = formatRouteLabel(m.route_path);
 
         return `
           <div class="node-card ${stateClass}" onclick="focusNodeOnMap(${id})">
             <div class="node-top">
               <div>
                 <div class="node-name">${nom}</div>
-                <div class="node-meta">ID LoRa : <strong>${id}</strong> • ${mat} • Trame #${m.seq || 0}</div>
+                <div class="node-meta">ID LoRa : <strong>${id}</strong> • ${routeLabel} • Trame #${m.seq || 0}</div>
               </div>
               <span class="pill ${stateClass}">${pillText}</span>
             </div>
@@ -585,7 +593,7 @@
   }
 
   // ============================================================================
-  // 5. DESSIN DES CAPTEURS, RELAIS, BASE ET LIAISONS RADIO SUR LA CARTE
+  // 5. DESSIN DES CAPTEURS, RELAIS, BASE ET LIAISONS RADIO DYNAMIQUES
   // ============================================================================
   const boundsPoints = [];
   let nodeCoordinates = {};
@@ -658,7 +666,7 @@
       `);
     });
 
-    // 3. Marqueurs des Nœuds Capteurs (Vert = OK, Rouge = VIDE, Orange = Hors ligne > 2h01)
+    // 3. Marqueurs des Nœuds Capteurs + Chemin Radio Réel (Direct ou via Relais)
     allNodeIds.forEach(id => {
       const cfg = noeudsMap[id];
       if (!cfg || cfg.lat == null || cfg.lon == null) return;
@@ -674,15 +682,35 @@
 
       const color = isOffline ? "#d97706" : (isVide ? "#dc2626" : "#16a34a");
 
-      // Liaison radio entre la Base Heltec V3 et le Nœud Capteur
+      // Construction dynamique des sommets de la polyligne selon route_path
+      const pathPoints = [nodeLatLng];
+      const rawRoute = (m && m.route_path) ? String(m.route_path).trim() : "";
+
+      if (rawRoute && rawRoute !== "FLOOD") {
+        rawRoute.split(',').forEach(part => {
+          const rid = Number(part.trim());
+          if (rid && relayCoordinates[rid]) {
+            pathPoints.push(relayCoordinates[rid]);
+          }
+        });
+      }
+      if (baseLatLng) {
+        pathPoints.push(baseLatLng);
+      }
+
+      if (pathPoints.length >= 2) {
+        L.polyline(pathPoints, {
+          color: color, weight: 2.5, dashArray: "6, 6", opacity: 0.85
+        }).addTo(markersLayer);
+      }
+
       let distText = "";
       if (baseLatLng) {
         const distMeters = Math.round(map.distance(baseLatLng, nodeLatLng));
         distText = `<br>Distance Base : <strong>${distMeters} m</strong>`;
-        L.polyline([baseLatLng, nodeLatLng], {
-          color: color, weight: 2.5, dashArray: "6, 6", opacity: 0.85
-        }).addTo(markersLayer);
       }
+
+      const routeLabel = formatRouteLabel(m ? m.route_path : null);
 
       const marker = L.circleMarker(nodeLatLng, {
         radius: 9, fillColor: color, color: "#ffffff", weight: 2.5, fillOpacity: 0.95
@@ -692,6 +720,7 @@
         <strong>${cfg.nom || 'Capteur #' + id}</strong> (${cfg.materiel || 'LoRa'})<br>
         ID LoRa : <strong>${id}</strong><br>
         Statut : <strong>${isOffline ? 'HORS LIGNE (> 2h01)' : (m ? m.statut : 'En attente de 1ère trame')}</strong><br>
+        Chemin radio : <strong>${routeLabel}</strong><br>
         Batterie : ${m ? m.vbat : '-'} | RSSI : ${m ? m.rssi + ' dBm' : '-'}
         ${distText}
       `);
