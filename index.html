@@ -18,6 +18,8 @@
       --card: #ffffff;
       --primary: #0f172a;
       --accent: #2563eb;
+      --relay: #7c3aed;
+      --relay-bg: #ede9fe;
       --ok: #16a34a;
       --ok-bg: #dcfce7;
       --danger: #dc2626;
@@ -90,14 +92,21 @@
       padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
     .panel-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
     }
     .panel-title { font-size: 1.05rem; font-weight: 700; margin: 0; }
+
+    /* LEGENDE CARTE */
+    .map-legend {
+      display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 0.78rem; color: var(--muted);
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-weight: 600; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
 
     /* CARTE LEAFLET */
     #map { width: 100%; height: 430px; border-radius: 10px; border: 1px solid var(--border); z-index: 1; }
 
-    /* CARTES CAPTEURS */
+    /* CARTES CAPTEURS & RELAIS */
     .node-card {
       border: 1px solid var(--border); border-left: 6px solid var(--muted);
       border-radius: 12px; padding: 14px; margin-bottom: 12px; background: #fff;
@@ -107,6 +116,7 @@
     .node-card.ok { border-left-color: var(--ok); }
     .node-card.vide { border-left-color: var(--danger); }
     .node-card.offline { border-left-color: var(--warn); }
+    .node-card.relay { border-left-color: var(--relay); }
 
     .node-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
     .node-name { font-weight: 700; font-size: 1.05rem; }
@@ -115,6 +125,7 @@
     .pill.ok { background: var(--ok-bg); color: var(--ok); }
     .pill.vide { background: var(--danger-bg); color: var(--danger); }
     .pill.offline { background: var(--warn-bg); color: var(--warn); }
+    .pill.relay { background: var(--relay-bg); color: var(--relay); }
 
     .metrics-grid {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
@@ -136,7 +147,7 @@
 <div id="loginScreen" class="login-wrapper">
   <div class="login-card">
     <h1>ViaRemota</h1>
-    <p>Supervision de cuves & télémétrie radio LoRa</p>
+    <p>Supervision de cuves &amp; télémétrie radio LoRa</p>
     <form onsubmit="handleLogin(event)">
       <div class="form-group">
         <label>Adresse e-mail de l'exploitation</label>
@@ -174,6 +185,10 @@
         <div class="kpi-val" id="kpiTotal">-</div>
       </div>
       <div class="kpi-card">
+        <div class="kpi-lbl">Relais Solaire(s)</div>
+        <div class="kpi-val" id="kpiRelays" style="color:var(--relay);">-</div>
+      </div>
+      <div class="kpi-card">
         <div class="kpi-lbl">État des Niveaux</div>
         <div class="kpi-val" id="kpiAlerts">-</div>
       </div>
@@ -189,22 +204,29 @@
       <div>
         <div class="panel">
           <div class="panel-header">
-            <h3 class="panel-title">Carte du Réseau LoRa (Base & Nœuds Émetteurs)</h3>
-            <span style="font-size:0.78rem; color:var(--muted);">Fonds OSM / Google Satellite</span>
+            <h3 class="panel-title">Carte du Réseau LoRa (Base, Relais &amp; Capteurs)</h3>
+            <span style="font-size:0.78rem; color:var(--muted);">Cliquer sur un point pour son ID</span>
           </div>
           <div id="map"></div>
+          <div class="map-legend">
+            <span class="legend-item"><span class="dot" style="background:#2563eb;"></span> Station Base</span>
+            <span class="legend-item"><span class="dot" style="background:#7c3aed;"></span> Relais LoRa</span>
+            <span class="legend-item"><span class="dot" style="background:#16a34a;"></span> Cuve OK</span>
+            <span class="legend-item"><span class="dot" style="background:#dc2626;"></span> Cuve Vide</span>
+            <span class="legend-item"><span class="dot" style="background:#d97706;"></span> Hors ligne (&gt; 2h01)</span>
+          </div>
         </div>
 
         <div class="panel">
           <div class="panel-header">
-            <h3 class="panel-title">Historique Batterie (V) & Signal Radio (RSSI)</h3>
+            <h3 class="panel-title">Historique Batterie (V) &amp; Signal Radio (RSSI)</h3>
             <select id="chartNodeSelect" style="width:auto; padding:6px 10px;" onchange="updateChart()"></select>
           </div>
           <canvas id="telemetryChart" height="115"></canvas>
         </div>
       </div>
 
-      <!-- Colonne Droite : Cartes d'état des capteurs & Journal -->
+      <!-- Colonne Droite : Cartes d'état des capteurs, Relais & Journal -->
       <div>
         <div class="panel">
           <div class="panel-header">
@@ -212,6 +234,14 @@
             <span style="font-size:0.75rem; color:var(--muted);">Cliquer pour centrer</span>
           </div>
           <div id="nodesContainer"></div>
+        </div>
+
+        <div class="panel" id="relaysPanel">
+          <div class="panel-header">
+            <h3 class="panel-title">Relais Solaires LoRa</h3>
+            <span style="font-size:0.75rem; color:var(--muted);">Cliquer pour centrer</span>
+          </div>
+          <div id="relaysContainer"></div>
         </div>
 
         <div class="panel">
@@ -243,7 +273,7 @@
   // CONFIGURATION SUPABASE (COMMUNE A TOUS LES CLIENTS - FILTREE PAR RLS)
   // ============================================================================
   const SUPABASE_URL = "https://ujiqjqrbzmfssbmtljkd.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_gtZBDp5CUD8Hk06Wz3Qr-w__ruJm8-g";
+  const SUPABASE_KEY = "sb_publishable_gtZBDp5CUD8HkO6Wz3Qr-w__ruJm8-g"; // Publishable key
 
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -251,11 +281,14 @@
   let map = null, markersLayer = null;
   let telemetryChart = null;
   let stationsList = [];
-  let noeudsMap = {};    // Clé: cuve_id -> config du nœud (nom, type, matériel, lat, lon)
-  let mesuresList = [];  // Historique des mesures reçues
+  let noeudsMap = {};       // Clé: cuve_id -> config du capteur
+  let relaisMap = {};       // Clé: relais_id -> config du relais
+  let mesuresList = [];
+  let relaisMesuresList = [];
   let refreshTimer = null;
 
-  const OFFLINE_THRESHOLD_SEC = 7260; // Considéré hors-ligne si aucune trame depuis 2h01
+  // 2h01 = 121 minutes = 7260 secondes
+  const OFFLINE_THRESHOLD_SEC = 7260;
 
   // ============================================================================
   // 1. GESTION SESSION & AUTHENTIFICATION
@@ -293,44 +326,31 @@
     initMap();
     loadAllData();
     if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(loadAllData, 15000); // Rafraîchissement auto toutes les 15s
+    refreshTimer = setInterval(loadAllData, 15000);
   }
 
   // ============================================================================
-  // 2. INITIALISATION CARTE LEAFLET (OSM + GOOGLE SATELLITE HYBRIDE)
+  // 2. INITIALISATION CARTE LEAFLET
   // ============================================================================
   function initMap() {
     if (map) return;
-
-    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap'
-    });
-
-    const googleHybridLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-      maxZoom: 20,
-      attribution: '© Google Satellite'
-    });
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+    const googleHybridLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, attribution: '© Google Satellite' });
 
     map = L.map('map', {
       center: [48.11, -1.68],
       zoom: 14,
       layers: [googleHybridLayer]
     });
-
-    L.control.layers({
-      "Satellite Google": googleHybridLayer,
-      "Plan OpenStreetMap": osmLayer
-    }).addTo(map);
-
+    L.control.layers({ "Satellite Google": googleHybridLayer, "Plan OpenStreetMap": osmLayer }).addTo(map);
     markersLayer = L.layerGroup().addTo(map);
   }
 
   // ============================================================================
-  // 3. CHARGEMENT DES DONNEES DEPUIS SUPABASE (RLS AUTOMATIQUE)
+  // 3. CHARGEMENT DES DONNEES (RLS AUTOMATIQUE)
   // ============================================================================
   async function loadAllData() {
-    // A. Lecture de la station du client
+    // 1. Stations de base
     const { data: stData, error: stErr } = await sb.from('stations').select('*');
     if (stErr) console.error("Erreur lecture stations:", stErr.message);
     stationsList = stData || [];
@@ -338,84 +358,98 @@
       document.getElementById('exploitationName').innerText = stationsList[0].nom_exploitation || "Exploitation Connectée";
     }
 
-    // B. Lecture des nœuds émetteurs de cuves déclarés dans noeuds_cuves
+    // 2. Nœuds capteurs
     const { data: ndData, error: ndErr } = await sb.from('noeuds_cuves').select('*');
     if (ndErr) console.error("Erreur lecture noeuds_cuves:", ndErr.message);
     noeudsMap = {};
     (ndData || []).forEach(n => { noeudsMap[Number(n.cuve_id)] = n; });
 
-    // C. Lecture des 200 dernières mesures dans telemetrie_cuves
+    // 3. Relais simples
+    const { data: rlData, error: rlErr } = await sb.from('relais').select('*');
+    if (rlErr) console.error("Erreur lecture relais:", rlErr.message);
+    relaisMap = {};
+    (rlData || []).forEach(r => { relaisMap[Number(r.relais_id)] = r; });
+
+    // 4. Télémétrie capteurs
     const { data: msData, error: msErr } = await sb
       .from('telemetrie_cuves')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200);
     if (msErr) console.error("Erreur lecture telemetrie_cuves:", msErr.message);
-
     mesuresList = msData || [];
-    document.getElementById('lastSyncText').innerText = "Synchro : " + new Date().toLocaleTimeString();
 
+    // 5. Télémétrie relais
+    const { data: rlMsData, error: rlMsErr } = await sb
+      .from('telemetrie_relais')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (rlMsErr) console.error("Erreur lecture telemetrie_relais:", rlMsErr.message);
+    relaisMesuresList = rlMsData || [];
+
+    document.getElementById('lastSyncText').innerText = "Synchro : " + new Date().toLocaleTimeString();
     renderDashboard();
   }
 
   // ============================================================================
-  // 4. RENDU CARTES, CARTOGRAPHIE, GRAPHIQUE ET TABLEAU
+  // 4. RENDU CARTES, CARTOGRAPHIE ET GRAPHIQUE
   // ============================================================================
+  function formatAge(ageSec) {
+    if (ageSec < 60) return `${ageSec}s`;
+    if (ageSec < 3600) return `${Math.floor(ageSec / 60)} min`;
+    const h = Math.floor(ageSec / 3600);
+    const m = Math.floor((ageSec % 3600) / 60);
+    return `${h}h${String(m).padStart(2, '0')}`;
+  }
+
   function renderDashboard() {
-    // Regrouper le dernier état connu par cuve_id
+    // Dernières mesures par capteur
     const latestByNode = {};
-    mesuresList.forEach(m => {
-      const cid = Number(m.cuve_id);
-      if (!latestByNode[cid]) latestByNode[cid] = m;
-    });
+    mesuresList.forEach(m => { if (!latestByNode[Number(m.cuve_id)]) latestByNode[Number(m.cuve_id)] = m; });
+    const allNodeIds = Array.from(new Set([...Object.keys(noeudsMap).map(Number), ...Object.keys(latestByNode).map(Number)])).sort((a, b) => a - b);
 
-    // Liste complète des IDs de nœuds (ceux configurés dans `noeuds_cuves` + ceux reçus dans `telemetrie_cuves`)
-    const allNodeIds = Array.from(new Set([
-      ...Object.keys(noeudsMap).map(Number),
-      ...Object.keys(latestByNode).map(Number)
-    ])).sort((a, b) => a - b);
+    // Dernières mesures par relais
+    const latestByRelay = {};
+    relaisMesuresList.forEach(r => { if (!latestByRelay[Number(r.relais_id)]) latestByRelay[Number(r.relais_id)] = r; });
+    const allRelayIds = Array.from(new Set([...Object.keys(relaisMap).map(Number), ...Object.keys(latestByRelay).map(Number)])).sort((a, b) => a - b);
 
-    // Mise à jour des KPIs
+    // KPIs
     document.getElementById('kpiTotal').innerText = allNodeIds.length + " actif(s)";
+    document.getElementById('kpiRelays').innerText = allRelayIds.length + " déployé(s)";
+
     let alertCount = 0;
     allNodeIds.forEach(id => {
       const m = latestByNode[id];
-      if (!m || (m.statut || "").toUpperCase().includes("VIDE")) alertCount++;
+      const ageSec = m ? Math.floor((Date.now() - new Date(m.created_at).getTime()) / 1000) : 999999;
+      if (!m || ageSec > OFFLINE_THRESHOLD_SEC || (m.statut || "").toUpperCase().includes("VIDE")) alertCount++;
     });
+
     const kpiAlertsEl = document.getElementById('kpiAlerts');
     if (alertCount === 0 && allNodeIds.length > 0) {
-      kpiAlertsEl.innerText = "Tous OK";
-      kpiAlertsEl.style.color = "var(--ok)";
+      kpiAlertsEl.innerText = "Tous OK"; kpiAlertsEl.style.color = "var(--ok)";
     } else if (allNodeIds.length > 0) {
-      kpiAlertsEl.innerText = alertCount + " Alerte(s)";
-      kpiAlertsEl.style.color = "var(--danger)";
+      kpiAlertsEl.innerText = alertCount + " Alerte(s)"; kpiAlertsEl.style.color = "var(--danger)";
     }
+    if (mesuresList.length > 0) document.getElementById('kpiLastTime').innerText = new Date(mesuresList[0].created_at).toLocaleTimeString();
 
-    if (mesuresList.length > 0) {
-      document.getElementById('kpiLastTime').innerText = new Date(mesuresList[0].created_at).toLocaleTimeString();
-    }
-
-    // Rendu des cartes de capteurs
+    // Cartes Capteurs
     const container = document.getElementById('nodesContainer');
     if (allNodeIds.length === 0) {
-      container.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">Aucun capteur détecté pour le moment.</div>';
+      container.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">Aucun capteur détecté.</div>';
     } else {
       container.innerHTML = allNodeIds.map(id => {
         const cfg = noeudsMap[id] || {};
         const m = latestByNode[id];
-        const nom = cfg.nom || `Nœud Capteur #${id}`;
-        const mat = cfg.materiel || "Émetteur LoRa";
-        const type = (cfg.type_noeud || "cuve").toUpperCase();
+        const nom = cfg.nom || `Nœud #${id}`;
+        const mat = cfg.materiel || "Heltec T114";
 
         if (!m) {
           return `
             <div class="node-card offline" onclick="focusNodeOnMap(${id})">
               <div class="node-top">
-                <div>
-                  <div class="node-name">${nom}</div>
-                  <div class="node-meta">ID #${id} • ${mat} (${type})</div>
-                </div>
-                <span class="pill offline">EN ATTENTE</span>
+                <div><div class="node-name">${nom}</div><div class="node-meta">ID LoRa : <strong>${id}</strong> • ${mat}</div></div>
+                <span class="pill offline">ATTENTE</span>
               </div>
             </div>`;
         }
@@ -425,88 +459,149 @@
         const isVide = (m.statut || "").toUpperCase().includes("VIDE");
         const stateClass = isOffline ? "offline" : (isVide ? "vide" : "ok");
         const pillText = isOffline ? "HORS LIGNE" : m.statut;
-        const ageText = ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)} min`;
 
         return `
           <div class="node-card ${stateClass}" onclick="focusNodeOnMap(${id})">
             <div class="node-top">
-              <div>
-                <div class="node-name">${nom}</div>
-                <div class="node-meta">ID #${id} • ${mat} • Trame #${m.seq || 0}</div>
-              </div>
+              <div><div class="node-name">${nom}</div><div class="node-meta">ID LoRa : <strong>${id}</strong> • Trame #${m.seq || 0}</div></div>
               <span class="pill ${stateClass}">${pillText}</span>
             </div>
             <div class="metrics-grid">
-              <div><div class="m-val">${m.vbat || '-'}</div><div class="m-lbl">Batterie</div></div>
-              <div><div class="m-val">${m.rssi} dBm</div><div class="m-lbl">RSSI</div></div>
-              <div><div class="m-val">${m.snr} dB</div><div class="m-lbl">SNR</div></div>
-              <div><div class="m-val">${ageText}</div><div class="m-lbl">Âge</div></div>
+              <div><div class="m-val">${m.vbat || '-'}</div><div class="m-lbl">Bat.</div></div>
+              <div><div class="m-val">${m.rssi}</div><div class="m-lbl">RSSI</div></div>
+              <div><div class="m-val">${m.snr}</div><div class="m-lbl">SNR</div></div>
+              <div><div class="m-val">${formatAge(ageSec)}</div><div class="m-lbl">Âge</div></div>
             </div>
           </div>`;
       }).join('');
     }
 
-    // Rendu de la carte Leaflet
-    renderMapMarkers(allNodeIds, latestByNode);
+    // Cartes Relais Solaires
+    const relaysContainer = document.getElementById('relaysContainer');
+    if (allRelayIds.length === 0) {
+      relaysContainer.innerHTML = '<div style="color:var(--muted); font-size:0.9rem;">Aucun relais solaire déclaré.</div>';
+    } else {
+      relaysContainer.innerHTML = allRelayIds.map(id => {
+        const cfg = relaisMap[id] || {};
+        const r = latestByRelay[id];
+        const nom = cfg.nom || `Relais Solaire #${id}`;
+        const hexId = '0x' + id.toString(16).toUpperCase();
 
-    // Rendu de la liste déroulante du graphique
+        if (!r) {
+          return `
+            <div class="node-card relay" onclick="focusRelayOnMap(${id})">
+              <div class="node-top">
+                <div><div class="node-name">${nom}</div><div class="node-meta">ID LoRa : <strong>${id}</strong> (${hexId})</div></div>
+                <span class="pill offline">ATTENTE</span>
+              </div>
+            </div>`;
+        }
+
+        const ageSec = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 1000);
+        const isOffline = ageSec > OFFLINE_THRESHOLD_SEC;
+
+        return `
+          <div class="node-card ${isOffline ? 'offline' : 'relay'}" onclick="focusRelayOnMap(${id})">
+            <div class="node-top">
+              <div><div class="node-name">${nom}</div><div class="node-meta">ID LoRa : <strong>${id}</strong> (${hexId}) • Trame #${r.seq || 0}</div></div>
+              <span class="pill ${isOffline ? 'offline' : 'relay'}">${isOffline ? 'HORS LIGNE' : 'ACTIF'}</span>
+            </div>
+            <div class="metrics-grid">
+              <div><div class="m-val">${r.vbat || '-'}</div><div class="m-lbl">Bat.</div></div>
+              <div><div class="m-val">${r.paquets_relayes ?? 0}</div><div class="m-lbl">Relayés</div></div>
+              <div><div class="m-val">${r.rssi} / ${r.snr}</div><div class="m-lbl">RSSI/SNR</div></div>
+              <div><div class="m-val">${formatAge(ageSec)}</div><div class="m-lbl">Âge</div></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    renderMapMarkers(allNodeIds, latestByNode, allRelayIds, latestByRelay);
+
     const selectEl = document.getElementById('chartNodeSelect');
     const previousVal = selectEl.value;
     selectEl.innerHTML = allNodeIds.map(id => {
-      const nom = (noeudsMap[id] && noeudsMap[id].nom) ? noeudsMap[id].nom : `Capteur #${id}`;
-      return `<option value="${id}">${nom}</option>`;
+      const nom = (noeudsMap[id] && noeudsMap[id].nom) ? noeudsMap[id].nom : `Nœud #${id}`;
+      return `<option value="${id}">${nom} (ID ${id})</option>`;
     }).join('');
     if (previousVal && allNodeIds.includes(Number(previousVal))) selectEl.value = previousVal;
     updateChart();
 
-    // Rendu du tableau des 15 dernières mesures
     const tbody = document.getElementById('historyTableBody');
     tbody.innerHTML = mesuresList.slice(0, 15).map(m => {
-      const nom = (noeudsMap[m.cuve_id] && noeudsMap[m.cuve_id].nom) ? noeudsMap[m.cuve_id].nom : `#${m.cuve_id}`;
-      const d = new Date(m.created_at);
-      return `
-        <tr>
-          <td>${d.toLocaleTimeString()}</td>
-          <td><strong>${nom}</strong></td>
-          <td>${m.statut}</td>
-          <td>${m.vbat}</td>
-          <td>${m.rssi} dBm / ${m.snr} dB</td>
-        </tr>`;
+      const nom = (noeudsMap[Number(m.cuve_id)] && noeudsMap[Number(m.cuve_id)].nom) ? noeudsMap[Number(m.cuve_id)].nom : `#${m.cuve_id}`;
+      return `<tr><td>${new Date(m.created_at).toLocaleTimeString()}</td><td><strong>${nom}</strong></td><td>${m.statut}</td><td>${m.vbat}</td><td>${m.rssi} / ${m.snr}</td></tr>`;
     }).join('');
   }
 
   // ============================================================================
-  // 5. DESSIN DES CAPTEURS, DE LA BASE ET DES LIAISONS RADIO SUR LA CARTE
+  // 5. CARTE (LIAISONS, MARQUEURS & INFOBULLES AVEC ID LORA)
   // ============================================================================
   const boundsPoints = [];
   let nodeCoordinates = {};
+  let relayCoordinates = {};
 
-  function renderMapMarkers(allNodeIds, latestByNode) {
+  function renderMapMarkers(allNodeIds, latestByNode, allRelayIds, latestByRelay) {
     if (!map || !markersLayer) return;
     markersLayer.clearLayers();
     boundsPoints.length = 0;
     nodeCoordinates = {};
+    relayCoordinates = {};
 
     const baseStation = stationsList[0];
     let baseLatLng = null;
 
-    // 1. Marqueur de la Station de Base Centrale (Heltec V3)
+    // 1. Marqueur Station Base (Bleu #2563eb)
     if (baseStation && baseStation.lat != null && baseStation.lon != null) {
       baseLatLng = [Number(baseStation.lat), Number(baseStation.lon)];
       boundsPoints.push(baseLatLng);
-
-      const baseMarker = L.circleMarker(baseLatLng, {
-        radius: 10, fillColor: "#2563eb", color: "#ffffff", weight: 3, fillOpacity: 1
-      }).addTo(markersLayer);
-
-      baseMarker.bindPopup(`
-        <strong>📡 Station Base (Heltec V3)</strong><br>
-        Exploitation : ${baseStation.nom_exploitation || '-'}<br>
-        Coordonnées : ${Number(baseStation.lat).toFixed(5)}, ${Number(baseStation.lon).toFixed(5)}
-      `);
+      L.circleMarker(baseLatLng, { radius: 10, fillColor: "#2563eb", color: "#fff", weight: 3, fillOpacity: 1 }).addTo(markersLayer)
+       .bindPopup(
+         `<strong>📡 ${baseStation.nom_exploitation || 'Station Base (Heltec V3)'}</strong><br>` +
+         `ID Radio LoRa : <strong>161 (0xA1)</strong><br>` +
+         `Station UUID : <code style="font-size:0.72rem;">${baseStation.station_id}</code><br>` +
+         `GPS : ${Number(baseStation.lat).toFixed(5)}, ${Number(baseStation.lon).toFixed(5)}`
+       );
     }
 
-    // 2. Marqueurs des Nœuds Capteurs (Heltec T114, etc.) + Traits de liaison LoRa
+    // 2. Marqueurs Relais Simples (Violet #7c3aed)
+    allRelayIds.forEach(id => {
+      const cfg = relaisMap[id];
+      if (!cfg || cfg.lat == null || cfg.lon == null) return;
+
+      const relayLatLng = [Number(cfg.lat), Number(cfg.lon)];
+      relayCoordinates[id] = relayLatLng;
+      boundsPoints.push(relayLatLng);
+
+      const r = latestByRelay[id];
+      const ageSec = r ? Math.floor((Date.now() - new Date(r.created_at).getTime()) / 1000) : 999999;
+      const isOffline = !r || ageSec > OFFLINE_THRESHOLD_SEC;
+      const hexId = '0x' + id.toString(16).toUpperCase();
+
+      let distText = "";
+      if (baseLatLng) {
+        distText = `<br>Distance Base : <strong>${Math.round(map.distance(baseLatLng, relayLatLng))} m</strong>`;
+        L.polyline([baseLatLng, relayLatLng], { color: "#7c3aed", weight: 2.5, dashArray: "4, 6", opacity: 0.85 }).addTo(markersLayer);
+      }
+
+      L.circleMarker(relayLatLng, {
+        radius: 9,
+        fillColor: "#7c3aed",
+        color: isOffline ? "#d97706" : "#fff",
+        weight: isOffline ? 3.5 : 2.5,
+        fillOpacity: 0.95
+      }).addTo(markersLayer)
+       .bindPopup(
+         `<strong>🔁 ${cfg.nom || 'Relais Solaire #' + id}</strong><br>` +
+         `ID Nœud LoRa : <strong>${id}</strong> (${hexId})<br>` +
+         `État : <strong>${isOffline ? 'HORS LIGNE (> 2h01)' : 'ACTIF'}</strong><br>` +
+         `Batterie : ${r ? r.vbat : '-'} • Relayés : <strong>${r ? (r.paquets_relayes ?? 0) : 0}</strong>` +
+         `${r ? `<br>Signal : RSSI ${r.rssi} dBm / SNR ${r.snr} dB` : ''}` +
+         `${distText}`
+       );
+    });
+
+    // 3. Marqueurs Capteurs Cuves (Vert = OK, Rouge = VIDE, Orange = Hors ligne > 2h01)
     allNodeIds.forEach(id => {
       const cfg = noeudsMap[id];
       if (!cfg || cfg.lat == null || cfg.lon == null) return;
@@ -519,29 +614,24 @@
       const ageSec = m ? Math.floor((Date.now() - new Date(m.created_at).getTime()) / 1000) : 999999;
       const isOffline = !m || ageSec > OFFLINE_THRESHOLD_SEC;
       const isVide = m && (m.statut || "").toUpperCase().includes("VIDE");
-
       const color = isOffline ? "#d97706" : (isVide ? "#dc2626" : "#16a34a");
+      const statutLabel = isOffline ? "HORS LIGNE (> 2h01)" : (m ? m.statut : "-");
 
-      // Liaison radio entre la Base Heltec V3 et le Nœud Capteur
       let distText = "";
       if (baseLatLng) {
-        const distMeters = Math.round(map.distance(baseLatLng, nodeLatLng));
-        distText = `<br>Distance Base : <strong>${distMeters} m</strong>`;
-        L.polyline([baseLatLng, nodeLatLng], {
-          color: color, weight: 2.5, dashArray: "6, 6", opacity: 0.85
-        }).addTo(markersLayer);
+        distText = `<br>Distance Base : <strong>${Math.round(map.distance(baseLatLng, nodeLatLng))} m</strong>`;
+        L.polyline([baseLatLng, nodeLatLng], { color: color, weight: 2.5, dashArray: "6, 6", opacity: 0.85 }).addTo(markersLayer);
       }
 
-      const marker = L.circleMarker(nodeLatLng, {
-        radius: 9, fillColor: color, color: "#ffffff", weight: 2.5, fillOpacity: 0.95
-      }).addTo(markersLayer);
-
-      marker.bindPopup(`
-        <strong>${cfg.nom || 'Capteur #' + id}</strong> (${cfg.materiel || 'LoRa'})<br>
-        Statut : <strong>${m ? m.statut : 'En attente de 1ère trame'}</strong><br>
-        Batterie : ${m ? m.vbat : '-'} | RSSI : ${m ? m.rssi + ' dBm' : '-'}
-        ${distText}
-      `);
+      L.circleMarker(nodeLatLng, { radius: 9, fillColor: color, color: "#fff", weight: 2.5, fillOpacity: 0.95 }).addTo(markersLayer)
+       .bindPopup(
+         `<strong>🛢️ ${cfg.nom || 'Capteur #' + id}</strong><br>` +
+         `ID Nœud LoRa : <strong>${id}</strong><br>` +
+         `Statut : <strong>${statutLabel}</strong><br>` +
+         `Batterie : ${m ? m.vbat : '-'}` +
+         `${m ? `<br>Signal : RSSI ${m.rssi} dBm / SNR ${m.snr} dB` : ''}` +
+         `${distText}`
+       );
     });
 
     if (boundsPoints.length > 0 && !map._initialFitDone) {
@@ -551,54 +641,34 @@
   }
 
   function focusNodeOnMap(id) {
-    if (nodeCoordinates[id] && map) {
-      map.setView(nodeCoordinates[id], 17);
-    }
+    if (nodeCoordinates[id] && map) map.setView(nodeCoordinates[id], 17);
     const selectEl = document.getElementById('chartNodeSelect');
-    if (selectEl) {
-      selectEl.value = String(id);
-      updateChart();
-    }
+    if (selectEl) { selectEl.value = String(id); updateChart(); }
+  }
+
+  function focusRelayOnMap(id) {
+    if (relayCoordinates[id] && map) map.setView(relayCoordinates[id], 17);
   }
 
   // ============================================================================
-  // 6. GRAPHIQUE TELEMETRIE (BATTERIE VBAT & RSSI)
+  // 6. GRAPHIQUE HISTORIQUE
   // ============================================================================
   function updateChart() {
     const selectedId = Number(document.getElementById('chartNodeSelect').value);
-    const nodeHistory = mesuresList
-      .filter(m => Number(m.cuve_id) === selectedId)
-      .slice(0, 30)
-      .reverse();
+    const nodeHistory = mesuresList.filter(m => Number(m.cuve_id) === selectedId).slice(0, 30).reverse();
 
     const labels = nodeHistory.map(m => new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
     const vbatValues = nodeHistory.map(m => parseFloat(String(m.vbat).replace(',', '.')) || null);
     const rssiValues = nodeHistory.map(m => m.rssi);
 
-    const ctx = document.getElementById('telemetryChart').getContext('2d');
     if (telemetryChart) telemetryChart.destroy();
-
-    telemetryChart = new Chart(ctx, {
+    telemetryChart = new Chart(document.getElementById('telemetryChart').getContext('2d'), {
       type: 'line',
       data: {
         labels: labels,
         datasets: [
-          {
-            label: 'Tension Batterie (V)',
-            data: vbatValues,
-            borderColor: '#16a34a',
-            backgroundColor: 'rgba(22, 163, 74, 0.1)',
-            yAxisID: 'yVbat',
-            tension: 0.25
-          },
-          {
-            label: 'Signal RSSI (dBm)',
-            data: rssiValues,
-            borderColor: '#2563eb',
-            backgroundColor: 'rgba(37, 99, 235, 0.1)',
-            yAxisID: 'yRssi',
-            tension: 0.25
-          }
+          { label: 'Tension (V)', data: vbatValues, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', yAxisID: 'yVbat', tension: 0.25 },
+          { label: 'RSSI (dBm)', data: rssiValues, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', yAxisID: 'yRssi', tension: 0.25 }
         ]
       },
       options: {
